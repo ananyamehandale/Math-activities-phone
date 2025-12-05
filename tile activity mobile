@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Factors of 12 (mobile fix)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- KaTeX (removed invalid attrs) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+    <style>
+        body { overscroll-behavior-y: contain; touch-action: pan-x pan-y; }
+        .grid-container { display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(12, 1fr); width:100%; height:100%; position: relative; } /* position:relative so absolutely positioned tiles are aligned to this */
+        .grid-cell { border:1px solid rgba(100,100,100,0.2); box-sizing:border-box; }
+        .draggable-tile-source { cursor:pointer; display:grid; grid-template-columns:var(--tile-grid-template); grid-template-rows:var(--tile-grid-template); touch-action:none; }
+        .placed-tile { position:absolute; opacity:0.95; box-shadow:0 4px 6px rgba(0,0,0,0.2); cursor:grab; z-index:10; display:grid; grid-template-columns:var(--tile-grid-template); grid-template-rows:var(--tile-grid-template); touch-action:none; box-sizing:border-box; }
+        .placed-tile.dragging { position: fixed; z-index:100; pointer-events:none; }
+        .tile-unit-cell { border:1px solid rgba(0,0,0,0.4); box-sizing:border-box; }
+        #grid-wrapper { border:2px solid #374151; background:white; overflow:hidden; touch-action:none; }
+        /* keep the rest of your CSS as-is (status, dialog etc.) */
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8 flex flex-col items-center font-sans select-none">
+    <div class="max-w-6xl w-full">
+        <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-gray-800 mb-2 text-center sm:text-left">Factors of 12</h1>
+        <p id="instruction-text" class="text-lg sm:text-xl text-gray-600 mb-6 font-semibold text-center sm:text-left">
+            Repeat any one type/size of tile to fill the big 12×12 square without any gaps
+        </p>
+
+        <div id="grid-wrapper" class="relative w-full lg:w-[600px] lg:h-[600px] shadow-2xl overflow-hidden bg-gray-100 aspect-square mx-auto">
+            <!-- IMPORTANT: tiling-grid now has position:relative (via .grid-container) and is the single source of truth -->
+            <div id="tiling-grid" class="grid-container w-full h-full"></div>
+        </div>
+
+        <div class="mt-4 flex space-x-4 w-full justify-center">
+            <button id="undo-button" class="px-4 py-2 bg-yellow-500 text-white rounded-lg">Undo</button>
+            <button id="reset-button" class="px-4 py-2 bg-red-200 text-black rounded-lg">Reset Board</button>
+        </div>
+
+        <div id="tile-options-container" class="bg-white p-4 sm:p-6 shadow-lg rounded-lg mt-6">
+            <div id="tile-options" class="flex flex-wrap gap-4 justify-center"></div>
+        </div>
+    </div>
+
+    <div id="ghost-tile"></div>
+
+    <script type="module">
+        function renderMath(){ if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.body, {delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]}); }
+
+        const GRID_SIZE = 12;
+        let UNIT_PIXEL_SIZE = 50;
+        const tileSizes = [2,3,4,5,6,7,8];
+        const factorTiles = [2,3,4,6];
+        const nonFactorTiles = [5,7,8];
+        const tileColors = {2:'bg-green-500',3:'bg-orange-500',4:'bg-blue-500',5:'bg-yellow-500',6:'bg-red-500',7:'bg-indigo-300',8:'bg-pink-300'};
+
+        let currentTileSize = null;
+        let placedTiles = [];
+        let history = [];
+        let isDragging = false;
+        let dragOriginIsSource = false;
+        let currentDragTile = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+        let lastPointerPos = null;
+
+        const tilingGrid = document.getElementById('tiling-grid');
+        const tileOptions = document.getElementById('tile-options');
+        const undoButton = document.getElementById('undo-button');
+        const resetButton = document.getElementById('reset-button');
+
+        // Use clientWidth so borders on parent don't change the math
+        function calculateUnitSize(){
+            const width = tilingGrid.clientWidth; // clientWidth excludes borders — more robust
+            UNIT_PIXEL_SIZE = width / GRID_SIZE;
+        }
+
+        function createTileElement(size){
+            calculateUnitSize();
+            const el = document.createElement('div');
+            el.className = `placed-tile ${tileColors[size]}`;
+            el.style.width = `${size * UNIT_PIXEL_SIZE}px`;
+            el.style.height = `${size * UNIT_PIXEL_SIZE}px`;
+            el.dataset.size = size;
+            el.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
+            for (let i=0;i<size*size;i++){
+                const cell = document.createElement('div');
+                cell.className = 'tile-unit-cell';
+                el.appendChild(cell);
+            }
+            return el;
+        }
+
+        function createTileOption(size){
+            const wrapper = document.createElement('div');
+            wrapper.className = 'tile-option-wrapper';
+            const tile = document.createElement('div');
+            tile.className = `draggable-tile-source ${tileColors[size]}`;
+            tile.dataset.size = size;
+            tile.style.width = `${40 * size / 2}px`;
+            tile.style.height = `${40 * size / 2}px`;
+            tile.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
+            for (let i=0;i<size*size;i++){ const c = document.createElement('div'); c.className='tile-unit-cell'; tile.appendChild(c); }
+            const label = document.createElement('span'); label.textContent = `${size}x${size}`;
+            wrapper.appendChild(tile); wrapper.appendChild(label);
+
+            tile.addEventListener('mousedown',(e)=>{ if (e.button===0) startDragFromSource(e,size); });
+            tile.addEventListener('touchstart',(e)=>{ startDragFromSource(e,size); }, { passive:false });
+            tile.addEventListener('click',(e)=>{ e.stopPropagation(); if (currentTileSize===size) currentTileSize=null; else currentTileSize=size; });
+
+            return wrapper;
+        }
+
+        function generateTileOptions(){ tileOptions.innerHTML=''; tileSizes.forEach(s=>tileOptions.appendChild(createTileOption(s))); }
+
+        function checkOverlap(x,y,size){
+            return placedTiles.some(t=>{
+                if (currentDragTile && t.element === currentDragTile) return false;
+                const xOverlap = Math.max(0, Math.min(x+size, t.x + t.size) - Math.max(x, t.x));
+                const yOverlap = Math.max(0, Math.min(y+size, t.y + t.size) - Math.max(y, t.y));
+                return xOverlap > 0 && yOverlap > 0;
+            });
+        }
+
+        function startDragFromSource(e, size){
+            if (e.type === 'touchstart') e.preventDefault();
+            currentTileSize = size;
+            currentDragTile = createTileElement(size);
+            currentDragTile.classList.add('dragging');
+            currentDragTile.style.position = 'fixed';
+            document.body.appendChild(currentDragTile);
+
+            const pos = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            const sourceRect = e.currentTarget.getBoundingClientRect();
+            const sourceUnit = sourceRect.width / size;
+            const factor = UNIT_PIXEL_SIZE / sourceUnit;
+            dragOffsetX = (pos.clientX - sourceRect.left) * factor;
+            dragOffsetY = (pos.clientY - sourceRect.top) * factor;
+
+            isDragging = true;
+            dragOriginIsSource = true;
+
+            currentDragTile.style.left = `${pos.clientX - dragOffsetX}px`;
+            currentDragTile.style.top = `${pos.clientY - dragOffsetY}px`;
+        }
+
+        function startDragFromBoard(e, tileData){
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            if (e.type === 'touchstart') e.preventDefault();
+
+            // remove tile from placed list while dragging
+            placedTiles = placedTiles.filter(t => t !== tileData);
+            calculateUnitSize();
+
+            const rect = tileData.element.getBoundingClientRect();
+            const pos = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            dragOffsetX = pos.clientX - rect.left;
+            dragOffsetY = pos.clientY - rect.top;
+
+            tileData.element.remove();
+            document.body.appendChild(tileData.element);
+            currentDragTile = tileData.element;
+            currentDragTile.classList.add('dragging');
+            currentDragTile.style.position = 'fixed';
+            currentDragTile.style.left = `${rect.left}px`;
+            currentDragTile.style.top = `${rect.top}px`;
+
+            isDragging = true;
+            dragOriginIsSource = false;
+            pushState();
+        }
+
+        function handleMove(e){
+            if (!isDragging || !currentDragTile) return;
+            e.preventDefault();
+            const pos = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            lastPointerPos = pos;
+            currentDragTile.style.left = `${pos.clientX - dragOffsetX}px`;
+            currentDragTile.style.top = `${pos.clientY - dragOffsetY}px`;
+
+            // preview validity
+            const size = parseInt(currentDragTile.dataset.size,10);
+            const gridRect = tilingGrid.getBoundingClientRect();
+            const topLeftX = pos.clientX - dragOffsetX - gridRect.left;
+            const topLeftY = pos.clientY - dragOffsetY - gridRect.top;
+            const unitX = Math.round(topLeftX / UNIT_PIXEL_SIZE);
+            const unitY = Math.round(topLeftY / UNIT_PIXEL_SIZE);
+            const outOfBounds = unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE;
+            if (outOfBounds || checkOverlap(unitX, unitY, size)) currentDragTile.classList.add('invalid');
+            else currentDragTile.classList.remove('invalid');
+        }
+
+        function handleEnd(e){
+            if (!isDragging || !currentDragTile) return;
+            isDragging = false;
+            currentDragTile.classList.remove('dragging');
+
+            const size = parseInt(currentDragTile.dataset.size,10);
+            const gridRect = tilingGrid.getBoundingClientRect();
+            const tileRect = currentDragTile.getBoundingClientRect();
+
+            // check if dropped outside grid
+            const isOverGrid = !(tileRect.right < gridRect.left || tileRect.left > gridRect.right || tileRect.bottom < gridRect.top || tileRect.top > gridRect.bottom);
+            if (!isOverGrid){
+                currentDragTile.remove();
+                if (!dragOriginIsSource) undoLastMove();
+                currentDragTile = null;
+                lastPointerPos = null;
+                return;
+            }
+
+            handleDrop(size, lastPointerPos);
+            currentDragTile = null;
+            lastPointerPos = null;
+        }
+
+        function handleDrop(size, pointerPos){
+            const gridRect = tilingGrid.getBoundingClientRect();
+            let topLeftX, topLeftY;
+            if (pointerPos){
+                topLeftX = pointerPos.clientX - dragOffsetX - gridRect.left;
+                topLeftY = pointerPos.clientY - dragOffsetY - gridRect.top;
+            } else {
+                const rect = currentDragTile.getBoundingClientRect();
+                topLeftX = rect.left - gridRect.left;
+                topLeftY = rect.top - gridRect.top;
+            }
+
+            const unitX = Math.round(topLeftX / UNIT_PIXEL_SIZE);
+            const unitY = Math.round(topLeftY / UNIT_PIXEL_SIZE);
+
+            if (unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE){
+                currentDragTile.remove();
+                if (!dragOriginIsSource) undoLastMove();
+                return;
+            }
+            if (checkOverlap(unitX, unitY, size)){
+                currentDragTile.remove();
+                if (!dragOriginIsSource) undoLastMove();
+                return;
+            }
+
+            const snapX = unitX * UNIT_PIXEL_SIZE;
+            const snapY = unitY * UNIT_PIXEL_SIZE;
+
+            // IMPORTANT: append to tilingGrid (position:relative) so absolute left/top are correct
+            finalizeTilePlacement(unitX, unitY, size, currentDragTile, snapX, snapY);
+            if (dragOriginIsSource) pushState();
+        }
+
+        function finalizeTilePlacement(x,y,size,element,snapX,snapY){
+            element.remove();
+            tilingGrid.appendChild(element);
+            element.style.position = 'absolute';
+            element.style.left = `${snapX}px`;
+            element.style.top = `${snapY}px`;
+            element.style.width = `${size * UNIT_PIXEL_SIZE}px`;
+            element.style.height = `${size * UNIT_PIXEL_SIZE}px`;
+
+            const tileData = { x, y, size, element, isPlaced: true };
+            placedTiles.push(tileData);
+
+            element.addEventListener('mousedown', (e)=>startDragFromBoard(e,tileData));
+            element.addEventListener('touchstart', (e)=>startDragFromBoard(e,tileData), { passive:false });
+        }
+
+        function pushState(){
+            const s = placedTiles.map(t=>({x:t.x,y:t.y,size:t.size}));
+            if (history.length===0 || JSON.stringify(history[history.length-1]) !== JSON.stringify(s)) history.push(s);
+        }
+
+        function undoLastMove(){
+            if (history.length === 0) return;
+            history.pop();
+            const prev = history.length > 0 ? history[history.length-1] : [];
+            // clear and rebuild
+            placedTiles.forEach(t=>t.element.remove());
+            placedTiles = [];
+            prev.forEach(td=>{
+                const el = createTileElement(td.size);
+                finalizeTilePlacement(td.x, td.y, td.size, el, td.x * UNIT_PIXEL_SIZE, td.y * UNIT_PIXEL_SIZE);
+            });
+        }
+
+        window.addEventListener('resize', ()=>{
+            calculateUnitSize();
+            placedTiles.forEach(t=>{
+                t.element.style.width = `${t.size * UNIT_PIXEL_SIZE}px`;
+                t.element.style.height = `${t.size * UNIT_PIXEL_SIZE}px`;
+                t.element.style.left = `${t.x * UNIT_PIXEL_SIZE}px`;
+                t.element.style.top = `${t.y * UNIT_PIXEL_SIZE}px`;
+            });
+            renderMath();
+        });
+
+        // init
+        function initGrid(){
+            calculateUnitSize();
+            if (tilingGrid.children.length === 0){
+                for (let i=0;i<GRID_SIZE*GRID_SIZE;i++){
+                    const c = document.createElement('div');
+                    c.className = 'grid-cell';
+                    tilingGrid.appendChild(c);
+                }
+            }
+        }
+
+        window.onload = ()=>{
+            initGrid();
+            generateTileOptions();
+            calculateUnitSize();
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('touchmove', handleMove, { passive:false });
+            document.addEventListener('mouseup', handleEnd);
+            document.addEventListener('touchend', handleEnd);
+            undoButton.addEventListener('click', undoLastMove);
+            resetButton.addEventListener('click', ()=>location.reload());
+            renderMath();
+        };
+    </script>
+</body>
+</html>
