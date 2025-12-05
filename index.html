@@ -13,6 +13,7 @@
 
     <style>
         /* Prevent Pull-to-Refresh and scrolling on dragged elements */
+        *, *::before, *::after { box-sizing: border-box; }
         body {
             overscroll-behavior-y: contain;
             touch-action: pan-x pan-y;
@@ -30,6 +31,8 @@
         .grid-cell {
             border: 1px solid rgba(100, 100, 100, 0.2);
             box-sizing: border-box;
+            width: 100%;
+            height: 100%;
         }
 
         .tile-option-wrapper {
@@ -73,11 +76,11 @@
             touch-action: none; 
             box-sizing: border-box;
         }
-        /* Updated: Fixed position for dragging to handle scrolling correctly */
+        /* Dragging style */
         .placed-tile.dragging {
             position: fixed; 
-            opacity: 0.8;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            opacity: 0.9;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
             cursor: grabbing;
             z-index: 100; 
             pointer-events: none; /* Let events pass through to check underlying elements */
@@ -104,6 +107,8 @@
         .tile-unit-cell {
             border: 1px solid rgba(0, 0, 0, 0.4); 
             box-sizing: border-box;
+            width: 100%;
+            height: 100%;
         }
         
         /* Grid Wrapper now handles the border to ensure inner grid size is perfect multiple of units */
@@ -199,7 +204,7 @@
 
     <div class="max-w-6xl w-full">
         <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-gray-800 mb-2 text-center sm:text-left">Factors of 12</h1>
-        <p id="instruction-text" class="text-lg sm:text-3xl text-gray-600 mb-6 font-bold text-center sm:text-left">
+        <p id="instruction-text" class="text-lg sm:text-xl text-gray-600 mb-6 font-semibold text-center sm:text-left">
             Repeat any one type/size of tile to fill the big 12×12 square without any gaps
         </p>
 
@@ -294,18 +299,23 @@
         const dialogContentArea = document.getElementById('dialog-content-area');
         const simpleMessageContainer = document.getElementById('simple-message-container');
 
-        // Calculate unit size using clientWidth (excludes borders)
+        // Calculate unit size using integer pixels from the smaller dimension (width/height)
         function calculateUnitSize() {
-            const width = tilingGrid.clientWidth;
-            UNIT_PIXEL_SIZE = width > 0 ? width / GRID_SIZE : 50;
+            const clientW = tilingGrid.clientWidth;
+            const clientH = tilingGrid.clientHeight;
+            const usable = Math.min(clientW, clientH);
+            // floor to integer pixels so multiples line up exactly
+            UNIT_PIXEL_SIZE = usable > 0 ? Math.floor(usable / GRID_SIZE) : 50;
         }
 
         function createTileElement(size, isGhost = false) {
-            const tileElement = document.createElement('div');
             calculateUnitSize(); 
+            const tileElement = document.createElement('div');
             tileElement.className = `${isGhost ? '' : 'placed-tile'} ${tileColors[size]}`;
-            tileElement.style.width = `${size * UNIT_PIXEL_SIZE}px`;
-            tileElement.style.height = `${size * UNIT_PIXEL_SIZE}px`;
+            // Use integer pixel sizes to avoid sub-pixel mismatch on mobile
+            const px = Math.round(size * UNIT_PIXEL_SIZE);
+            tileElement.style.width = `${px}px`;
+            tileElement.style.height = `${px}px`;
             tileElement.dataset.size = size;
             tileElement.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
             for (let i = 0; i < size * size; i++) {
@@ -498,26 +508,31 @@
             if (e.type === 'touchstart') e.preventDefault(); 
             
             selectTileSize(size); 
-            
+
+            // Create final-size element and append it BEFORE computing offsets to ensure accurate size
             currentDragTile = createTileElement(size, false);
             currentDragTile.classList.add('dragging');
-            // Use Fixed positioning to ignore scroll issues
             currentDragTile.style.position = 'fixed'; 
             document.body.appendChild(currentDragTile);
-            
+
+            // Measure created drag element and the source thumbnail, then compute offset mapping
             const pos = getPointerPos(e);
-            const tileRect = e.currentTarget.getBoundingClientRect();
-            const sourceTileUnitSize = tileRect.width / size; 
-            const factor = UNIT_PIXEL_SIZE / sourceTileUnitSize;
-            
-            dragOffsetX = (pos.clientX - tileRect.left) * factor;
-            dragOffsetY = (pos.clientY - tileRect.top) * factor;
+            const sourceRect = e.currentTarget.getBoundingClientRect();
+            const createdRect = currentDragTile.getBoundingClientRect();
+            // map pointer offset from source to created tile using exact ratio
+            const factorX = createdRect.width / Math.max(1, sourceRect.width);
+            const factorY = createdRect.height / Math.max(1, sourceRect.height);
+            dragOffsetX = (pos.clientX - sourceRect.left) * factorX;
+            dragOffsetY = (pos.clientY - sourceRect.top) * factorY;
             
             isDragging = true;
             dragOriginIsSource = true;
             
-            currentDragTile.style.left = `${pos.clientX - dragOffsetX}px`;
-            currentDragTile.style.top = `${pos.clientY - dragOffsetY}px`;
+            // snap currentDragTile to integer pixel coordinates for crispness on mobile
+            const leftPx = Math.round(pos.clientX - dragOffsetX);
+            const topPx = Math.round(pos.clientY - dragOffsetY);
+            currentDragTile.style.left = `${leftPx}px`;
+            currentDragTile.style.top = `${topPx}px`;
         }
 
         // DRAG START from Grid
@@ -543,9 +558,9 @@
             currentDragTile.classList.add('dragging');
             currentDragTile.style.position = 'fixed'; // Use fixed for dragging
             
-            // Position immediately
-            currentDragTile.style.left = `${rect.left}px`;
-            currentDragTile.style.top = `${rect.top}px`;
+            // Position and round to integer pixels
+            currentDragTile.style.left = `${Math.round(rect.left)}px`;
+            currentDragTile.style.top = `${Math.round(rect.top)}px`;
 
             isDragging = true;
             dragOriginIsSource = false; 
@@ -557,8 +572,9 @@
                 const pos = getPointerPos(e);
                 lastPointerPos = pos;
                 
-                currentDragTile.style.left = `${pos.clientX - dragOffsetX}px`;
-                currentDragTile.style.top = `${pos.clientY - dragOffsetY}px`;
+                // Use integer pixel positions for better alignment
+                currentDragTile.style.left = `${Math.round(pos.clientX - dragOffsetX)}px`;
+                currentDragTile.style.top = `${Math.round(pos.clientY - dragOffsetY)}px`;
                 
                 const size = parseInt(currentDragTile.dataset.size);
                 const gridRect = tilingGrid.getBoundingClientRect();
@@ -626,6 +642,7 @@
         }
         
         function handleDrop(size) {
+            calculateUnitSize(); // ensure unit size is up-to-date
             const gridRect = tilingGrid.getBoundingClientRect();
             const tileRect = currentDragTile.getBoundingClientRect();
             // Use stored lastPointerPos when available for consistent snapping
@@ -634,6 +651,7 @@
             const relativeX = pos.clientX - dragOffsetX - gridRect.left;
             const relativeY = pos.clientY - dragOffsetY - gridRect.top;
             
+            // compute unit coords and snap using rounded integer math
             const unitX = Math.round(relativeX / UNIT_PIXEL_SIZE);
             const unitY = Math.round(relativeY / UNIT_PIXEL_SIZE);
             
@@ -650,15 +668,15 @@
             }
             
             // Switch from FIXED drag position back to ABSOLUTE grid position
-            const snapX = unitX * UNIT_PIXEL_SIZE;
-            const snapY = unitY * UNIT_PIXEL_SIZE;
+            const snapX = Math.round(unitX * UNIT_PIXEL_SIZE);
+            const snapY = Math.round(unitY * UNIT_PIXEL_SIZE);
             finalizeTilePlacement(unitX, unitY, size, currentDragTile, snapX, snapY, true); 
             
             if (dragOriginIsSource) {
                 pushState();
                 checkWinCondition();
             } else {
-                // dragged from board and successfully placed — new state already pushed at drag start, but push again to capture new location
+                // dragged from board and successfully placed — we already pushed at drag start; push again to capture move as next history entry
                 pushState();
             }
         }
@@ -667,10 +685,10 @@
             element.remove(); 
             tilingGrid.appendChild(element); 
             element.style.position = 'absolute'; // Back to absolute inside grid
-            element.style.left = `${snapX}px`;
-            element.style.top = `${snapY}px`;
-            element.style.width = `${size * UNIT_PIXEL_SIZE}px`;
-            element.style.height = `${size * UNIT_PIXEL_SIZE}px`;
+            element.style.left = `${Math.round(snapX)}px`;
+            element.style.top = `${Math.round(snapY)}px`;
+            element.style.width = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
+            element.style.height = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
             
             const tileData = { x, y, size, element, isPlaced: true }; 
             placedTiles.push(tileData);
@@ -709,8 +727,11 @@
             const gridRect = tilingGrid.getBoundingClientRect();
             const relX = pos.clientX - gridRect.left;
             const relY = pos.clientY - gridRect.top;
-            const unitX = Math.round(relX / UNIT_PIXEL_SIZE) - Math.floor(currentTileSize / 2);
-            const unitY = Math.round(relY / UNIT_PIXEL_SIZE) - Math.floor(currentTileSize / 2);
+            // center the tile around the click
+            const centerUnitX = Math.round(relX / UNIT_PIXEL_SIZE);
+            const centerUnitY = Math.round(relY / UNIT_PIXEL_SIZE);
+            const unitX = centerUnitX - Math.floor(currentTileSize / 2);
+            const unitY = centerUnitY - Math.floor(currentTileSize / 2);
             if (unitX < 0 || unitY < 0 || unitX + currentTileSize > GRID_SIZE || unitY + currentTileSize > GRID_SIZE) return;
             if (checkOverlap(unitX, unitY, currentTileSize)) return;
             const el = createTileElement(currentTileSize, false);
@@ -807,10 +828,10 @@
         window.addEventListener('resize', () => {
             calculateUnitSize(); 
             placedTiles.forEach(tileData => {
-                 tileData.element.style.width = `${tileData.size * UNIT_PIXEL_SIZE}px`;
-                 tileData.element.style.height = `${tileData.size * UNIT_PIXEL_SIZE}px`;
-                 tileData.element.style.left = `${tileData.x * UNIT_PIXEL_SIZE}px`;
-                 tileData.element.style.top = `${tileData.y * UNIT_PIXEL_SIZE}px`;
+                 tileData.element.style.width = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
+                 tileData.element.style.height = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
+                 tileData.element.style.left = `${Math.round(tileData.x * UNIT_PIXEL_SIZE)}px`;
+                 tileData.element.style.top = `${Math.round(tileData.y * UNIT_PIXEL_SIZE)}px`;
             });
             renderMath();
         });
