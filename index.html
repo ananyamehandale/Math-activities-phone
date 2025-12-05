@@ -1,874 +1,546 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Factors of 12</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <title>Factors of 12</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- KaTeX CSS and JS for Math Rendering (removed invalid attributes) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
 
-    <style>
-        /* Prevent Pull-to-Refresh and scrolling on dragged elements */
-        *, *::before, *::after { box-sizing: border-box; }
-        body {
-            overscroll-behavior-y: contain;
-            touch-action: pan-x pan-y;
-        }
-        
-        /* Custom Styles */
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(12, 1fr); /* Use 1fr for fluid sizing */
-            grid-template-rows: repeat(12, 1fr);
-            width: 100%;
-            height: 100%;
-            position: relative; /* Important: tiles will be appended here and positioned absolute relative to it */
-        }
-        .grid-cell {
-            border: 1px solid rgba(100, 100, 100, 0.2);
-            box-sizing: border-box;
-            width: 100%;
-            height: 100%;
-        }
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    body{overscroll-behavior-y:contain; touch-action:pan-x pan-y}
 
-        .tile-option-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-        .draggable-tile-source {
-            cursor: pointer;
-            transition: transform 0.1s ease;
-            box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
-            position: relative;
-            border: 1px solid rgba(0, 0, 0, 0.1); 
-            display: grid; 
-            grid-template-columns: var(--tile-grid-template);
-            grid-template-rows: var(--tile-grid-template);
-            touch-action: none; /* Important for mobile drag start */
-        }
-        .draggable-tile-source:active {
-            transform: scale(1.05);
-        }
-        .tile-option-disabled {
-            opacity: 0.3;
-            cursor: not-allowed !important;
-        }
-        .tile-option-selected {
-            border: 3px solid #4F46E5; 
-            transform: scale(1.1);
-        }
-        
-        .placed-tile {
-            position: absolute;
-            opacity: 0.95;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-            cursor: grab;
-            z-index: 10;
-            display: grid;
-            grid-template-columns: var(--tile-grid-template);
-            grid-template-rows: var(--tile-grid-template);
-            touch-action: none; 
-            box-sizing: border-box;
-        }
-        /* Dragging style */
-        .placed-tile.dragging {
-            position: fixed; 
-            opacity: 0.9;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
-            cursor: grabbing;
-            z-index: 100; 
-            pointer-events: none; /* Let events pass through to check underlying elements */
-        }
+    /* Grid container uses CSS background gridlines instead of DOM cells */
+    .grid-container{
+      display:block;
+      width:100%;
+      height:100%;
+      position:relative; /* placed tiles are absolutely positioned relative to this */
+      background-color: white;
+      /* Two layered gradients: vertical and horizontal lines */
+      background-image:
+        linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px);
+      /* background-size depends on GRID_SIZE (set by JS on init) */
+      background-repeat: repeat;
+      background-position: 0 0;
+      background-origin: content-box;
+    }
 
-        /* Ghost Tile */
-        #ghost-tile {
-            position: fixed; 
-            pointer-events: none; 
-            opacity: 0.4;
-            z-index: 50; 
-            display: none; 
-            box-shadow: 0 0 15px rgba(79, 70, 229, 0.4); 
-            border: 2px dashed #4F46E5; 
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        #ghost-tile.invalid {
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); 
-            border: 2px dashed #EF4444; 
-            background-color: rgba(254, 202, 202, 0.5);
-            opacity: 0.5;
-        }
+    /* Cosmetic inner border (the outer wrapper keeps the dark border) */
+    .grid-line-faint { /* just available if needed */ }
 
-        .tile-unit-cell {
-            border: 1px solid rgba(0, 0, 0, 0.4); 
-            box-sizing: border-box;
-            width: 100%;
-            height: 100%;
-        }
-        
-        /* Grid Wrapper now handles the border to ensure inner grid size is perfect multiple of units */
-        #grid-wrapper {
-            border: 2px solid #374151; /* Border moved here */
-            border-radius: 0; 
-            transition: box-shadow 0.5s, border-color 0.5s, transform 0.5s; 
-            touch-action: none; 
-            background-color: white;
-        }
-        .bg-white:not(.dialog .bg-white) { 
-            border-radius: 0; 
-        }
-        .dialog .bg-white {
-             border-radius: 0.5rem; 
-        }
-        .dialog {
-            transition: all 0.3s ease-in-out;
-            z-index: 200; 
-        }
+    .tile-option-wrapper{display:flex;flex-direction:column;align-items:center;gap:4px}
+    .draggable-tile-source{
+      cursor:pointer; transition:transform .1s; box-shadow:2px 2px 4px rgba(0,0,0,.1);
+      position:relative; border:1px solid rgba(0,0,0,0.06);
+      display:grid; grid-template-columns:var(--tile-grid-template); grid-template-rows:var(--tile-grid-template);
+      touch-action:none;
+    }
+    .draggable-tile-source:active{transform:scale(1.03)}
+    .tile-option-selected{border:3px solid #4F46E5; transform:scale(1.06)}
+    .tile-option-disabled{opacity:.3; cursor:not-allowed}
 
-        #status-bar-wrapper {
-            max-width: 882px;
-            width: 100%;
-            margin-bottom: 1.5rem;
-        }
-        #status-bar {
-            background-color: transparent;
-            border-left: none;
-            padding-top: 0;
-            padding-bottom: 0;
-            max-height: 0; 
-            overflow: hidden;
-            transition: max-height 0.3s ease, padding 0.3s ease, background-color 0.3s ease;
-        }
-        #status-bar.active {
-            max-height: 120px; 
-            padding-top: 0.5rem; 
-            padding-bottom: 0.5rem; 
-            padding-left: 1rem; 
-            padding-right: 1rem; 
-            background-color: #e5e7eb; 
-        }
-        #status-message-content > p {
-            margin: 0;
-        }
-        
-        #hints-container {
-             min-height: 1.5rem; 
-             margin-bottom: 0.5rem;
-             transition: opacity 0.3s ease;
-        }
+    .placed-tile{
+      position:absolute;
+      opacity:.97;
+      box-shadow:0 4px 6px rgba(0,0,0,.15);
+      display:grid; grid-template-columns:var(--tile-grid-template); grid-template-rows:var(--tile-grid-template);
+      cursor:grab; z-index:10; touch-action:none; border-radius:2px; overflow:hidden;
+    }
+    .placed-tile.dragging{
+      position:fixed; z-index:120; pointer-events:none; opacity:.92; box-shadow:0 12px 30px rgba(0,0,0,.35);
+    }
 
-        @keyframes scale-pulse {
-            0% { transform: scale(1); box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-            50% { transform: scale(0.98); box-shadow: 0 0 20px #4ade80; }
-            100% { transform: scale(1.01); box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-        }
-        .pulse-win { animation: scale-pulse 1s ease-in-out forwards; }
+    .tile-unit-cell{
+      width:100%; height:100%;
+      /* Draw internal unit borders inside each tile (these are purely cosmetic) */
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,0.06);
+    }
 
-        .success-title { font-size: 2rem; line-height: 1.1; font-weight: 800; color: #10B981; }
-        .success-message { font-size: 1.5rem; line-height: 1.2; color: #374151; }
-        .factor-display { font-size: 4rem; font-weight: 900; line-height: 1; color: #4F46E5; }
-        .dialog-tile-visualization { width: 80px; height: 80px; display: grid; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border: 2px solid #374151; }
-        
-        @media (min-width: 640px) { 
-            .success-title { font-size: 3rem; }
-            .success-message { font-size: 2.25rem; }
-            .factor-display { font-size: 6rem; }
-            .dialog-tile-visualization { width: 100px; height: 100px; }
-        }
-        @media (max-width: 1023px) {
-            #grid-wrapper { width: 100%; height: 100vw; max-width: 600px; max-height: 600px; }
-            .grid-container { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(12, minmax(0, 1fr)); }
-            #status-bar-wrapper { margin-left: auto; margin-right: auto; }
-            .dialog .bg-white { padding: 1.5rem; }
-        }
-    </style>
-    
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        if (Object.keys(firebaseConfig).length > 0) {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            signInAnonymously(auth).catch(console.error);
-        }
-    </script>
+    #grid-wrapper{border:2px solid #374151; background:#fff; touch-action:none}
+    #status-bar-wrapper{max-width:882px;width:100%;margin-bottom:1.5rem}
+    #status-bar{background:transparent;max-height:0;overflow:hidden;transition:max-height .25s,padding .25s}
+    #status-bar.active{max-height:120px;padding:.5rem 1rem;background:#e5e7eb}
+    #hints-container{min-height:1.5rem;transition:opacity .25s}
+
+    /* dialog/ui visuals left as in your previous file */
+    .dialog{transition:all .3s ease-in-out; z-index:200}
+    .dialog-tile-visualization{width:80px;height:80px;display:grid;box-shadow:0 4px 12px rgba(0,0,0,.3);border:2px solid #374151}
+
+    /* debug overlay */
+    #debug-info{position:fixed;right:12px;bottom:12px;background:rgba(0,0,0,.6);color:white;padding:8px;border-radius:6px;font-size:13px;z-index:999;display:none}
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-4 sm:p-8 flex flex-col items-center font-sans select-none">
 
-    <div class="max-w-6xl w-full">
-        <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-gray-800 mb-2 text-center sm:text-left">Factors of 12</h1>
-        <p id="instruction-text" class="text-lg sm:text-xl text-gray-600 mb-6 font-semibold text-center sm:text-left">
-            Repeat any one type/size of tile to fill the big 12×12 square without any gaps
-        </p>
+  <div class="max-w-6xl w-full">
+    <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-gray-800 mb-2 text-center sm:text-left">Factors of 12</h1>
+    <p class="text-lg sm:text-xl text-gray-600 mb-6 font-semibold text-center sm:text-left">Repeat any one type/size of tile to fill the big 12×12 square without any gaps</p>
 
-        <div id="status-bar-wrapper" class="lg:w-[600px] mx-auto lg:mx-0">
-            <div id="status-bar" class="text-base sm:text-lg text-gray-800 font-medium rounded-md">
-                <div id="status-message-content" class="transition-opacity duration-300 opacity-0 flex justify-between items-center w-full gap-2 sm:gap-6"></div>
-            </div>
-            <div id="hints-container" class="w-full flex justify-between items-start text-sm opacity-0">
-                <span id="hint-left" class="text-blue-600 font-bold"></span>
-                <span id="hint-right" class="font-semibold"></span>
-            </div>
-        </div>
-
-        <div class="flex flex-col lg:flex-row gap-8 w-full">
-            <div class="flex flex-col flex-shrink-0 items-center w-full lg:w-auto">
-                 <div id="grid-wrapper" class="relative w-full lg:w-[600px] lg:h-[600px] shadow-2xl overflow-hidden bg-gray-100 aspect-square">
-                    <div id="tiling-grid" class="grid-container w-full h-full"></div>
-                </div>
-                
-                <div class="mt-4 flex space-x-4 w-full justify-center">
-                    <button id="undo-button" class="flex-1 sm:flex-none px-4 py-2 bg-yellow-500 text-white rounded-lg font-semibold transition duration-200 hover:bg-yellow-600 shadow-md text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" transform="scale(-1, 1) translate(-20, 0) rotate(90 10 10)"/>
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-7-9a1 1 0 011-1h2.586L7.293 8.293a1 1 0 011.414 1.414l-2 2a1 1 0 01-1.414 0l-2-2a1 1 0 010-1.414z" clip-rule="evenodd" transform="translate(0, 0) scale(1, -1) rotate(-90 10 10)"/>
-                        </svg>
-                        Undo
-                    </button>
-                    <button id="reset-button" class="flex-1 sm:flex-none px-4 py-2 bg-red-200 text-black rounded-lg font-semibold transition duration-200 hover:bg-red-300 shadow-md text-sm sm:text-base text-center">
-                        Reset Board
-                    </button>
-                </div>
-            </div>
-
-            <div class="flex-grow space-y-6 w-full">
-                <div id="tile-options-container" class="bg-white p-4 sm:p-6 shadow-lg rounded-lg">
-                    <h2 class="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-center lg:text-left">Click, Drag, and Place in the $12 \times 12$ (&larr;)</h2>
-                    <div id="tile-options" class="flex flex-wrap gap-4 justify-center lg:grid lg:grid-cols-2 lg:gap-x-12 lg:gap-y-6"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div id="ghost-tile"></div>
-
-    <div id="game-dialog" class="dialog fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center hidden z-[200]">
-        <div class="bg-white p-6 sm:p-8 shadow-2xl max-w-lg w-[90%] transform scale-90 opacity-0 rounded-lg" id="dialog-content-area">
-            <div id="simple-message-container" class="space-y-4 text-center"></div>
-            <div id="summary-content" class="space-y-4 pt-6 text-sm sm:text-base"></div>
-            <button id="dialog-close-button" class="mt-6 w-full px-4 py-3 bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition duration-150 rounded-lg text-lg">Play Again</button>
-        </div>
+    <div id="status-bar-wrapper" class="lg:w-[600px] mx-auto lg:mx-0">
+      <div id="status-bar" class="text-base sm:text-lg text-gray-800 font-medium rounded-md">
+        <div id="status-message-content" class="transition-opacity duration-300 opacity-0 flex justify-between items-center w-full gap-2 sm:gap-6"></div>
+      </div>
+      <div id="hints-container" class="w-full flex justify-between items-start text-sm opacity-0">
+        <span id="hint-left" class="text-blue-600 font-bold"></span>
+        <span id="hint-right" class="font-semibold"></span>
+      </div>
     </div>
 
-    <script type="module">
-        function renderMath() {
-            if (typeof renderMathInElement !== 'undefined') {
-                renderMathInElement(document.body, {
-                    delimiters: [{left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false}]
-                });
-            }
+    <div class="flex flex-col lg:flex-row gap-8 w-full">
+      <div class="flex flex-col items-center w-full lg:w-auto">
+        <div id="grid-wrapper" class="relative w-full lg:w-[600px] lg:h-[600px] shadow-2xl overflow-hidden bg-gray-100 aspect-square">
+          <!-- tiling-grid draws the lines with CSS background and holds tiles as children -->
+          <div id="tiling-grid" class="grid-container w-full h-full"></div>
+        </div>
+
+        <div class="mt-4 flex space-x-4 w-full justify-center">
+          <button id="undo-button" class="px-4 py-2 bg-yellow-500 text-white rounded-lg">Undo</button>
+          <button id="reset-button" class="px-4 py-2 bg-red-200 text-black rounded-lg">Reset Board</button>
+        </div>
+      </div>
+
+      <div class="flex-grow space-y-6 w-full">
+        <div id="tile-options-container" class="bg-white p-4 sm:p-6 shadow-lg rounded-lg">
+          <h2 class="text-lg sm:text-xl font-semibold text-gray-700 mb-4 text-center lg:text-left">Click, Drag, and Place in the $12 \times 12$ (&larr;)</h2>
+          <div id="tile-options" class="flex flex-wrap gap-4 justify-center lg:grid lg:grid-cols-2 lg:gap-x-12 lg:gap-y-6"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-dialog" class="dialog fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center hidden z-[200]">
+    <div class="bg-white p-6 sm:p-8 shadow-2xl max-w-lg w-[90%] transform scale-90 opacity-0 rounded-lg" id="dialog-content-area">
+      <div id="simple-message-container" class="space-y-4 text-center"></div>
+      <div id="summary-content" class="space-y-4 pt-6 text-sm sm:text-base"></div>
+      <button id="dialog-close-button" class="mt-6 w-full px-4 py-3 bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition duration-150 rounded-lg text-lg">Play Again</button>
+    </div>
+  </div>
+
+  <div id="debug-info"></div>
+
+  <script type="module">
+    // Toggle this to true to show debug overlay values on screen
+    const SHOW_DEBUG = false;
+
+    function renderMath() {
+      if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(document.body, {delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}]});
+      }
+    }
+
+    const GRID_SIZE = 12;
+    let UNIT_PIXEL_SIZE = 50;
+    const tileSizes = [2,3,4,5,6,7,8];
+    const factorTiles = [2,3,4,6];
+    const nonFactorTiles = [5,7,8];
+    const tileColors = {2:'bg-green-500',3:'bg-orange-500',4:'bg-blue-500',5:'bg-yellow-500',6:'bg-red-500',7:'bg-indigo-300',8:'bg-pink-300'};
+
+    let currentTileSize = null;
+    let placedTiles = [];
+    let history = [];
+    const MAX_HISTORY = 30;
+
+    let isDragging = false;
+    let dragOriginIsSource = false;
+    let currentDragTile = null;
+    let dragOffsetX = 0, dragOffsetY = 0;
+    let lastPointerPos = null;
+
+    const gridWrapper = document.getElementById('grid-wrapper');
+    const tilingGrid = document.getElementById('tiling-grid');
+    const tileOptionsContainer = document.getElementById('tile-options-container');
+    const tileOptionsSource = document.getElementById('tile-options');
+    const resetButton = document.getElementById('reset-button');
+    const undoButton = document.getElementById('undo-button');
+    const statusBar = document.getElementById('status-bar');
+    const statusMessageContent = document.getElementById('status-message-content');
+    const hintsContainer = document.getElementById('hints-container');
+    const hintLeft = document.getElementById('hint-left');
+    const hintRight = document.getElementById('hint-right');
+    const gameDialog = document.getElementById('game-dialog');
+    const dialogContentArea = document.getElementById('dialog-content-area');
+    const simpleMessageContainer = document.getElementById('simple-message-container');
+    const debugInfo = document.getElementById('debug-info');
+
+    function calculateUnitSize() {
+      // base snapping math uses floor of min(width/height)/GRID so we get integer px units for snapping
+      const clientW = tilingGrid.clientWidth;
+      const clientH = tilingGrid.clientHeight;
+      const usable = Math.min(clientW, clientH);
+      UNIT_PIXEL_SIZE = usable > 0 ? Math.floor(usable / GRID_SIZE) : 50;
+
+      // update the CSS background-size to match exact subdivisions (this ensures gridlines align with percent math)
+      const pxW = tilingGrid.clientWidth;
+      const pxH = tilingGrid.clientHeight;
+      const colPct = 100 / GRID_SIZE;
+      // using percentage background-size keeps lines aligned; still we set explicit pixel-size as well to avoid half-pixel artifacts
+      tilingGrid.style.backgroundSize = `${colPct}% ${colPct}%`;
+      if (SHOW_DEBUG && debugInfo) {
+        debugInfo.style.display = 'block';
+        debugInfo.innerText = `UNIT_PIXEL_SIZE: ${UNIT_PIXEL_SIZE}px\ntiling-grid: ${pxW}×${pxH}px\nbg-size: ${colPct}%`;
+      } else if (debugInfo) {
+        debugInfo.style.display = 'none';
+      }
+    }
+
+    function createTileElement(size, isGhost = false) {
+      calculateUnitSize();
+      const tileElement = document.createElement('div');
+      tileElement.className = `${isGhost ? '' : 'placed-tile'} ${tileColors[size]}`;
+      // pixel preview size for dragging; final placement will switch to percent
+      const px = Math.round(size * UNIT_PIXEL_SIZE);
+      tileElement.style.width = `${px}px`;
+      tileElement.style.height = `${px}px`;
+      tileElement.dataset.size = size;
+      tileElement.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
+      for (let i=0;i<size*size;i++){
+        const unitCell = document.createElement('div');
+        unitCell.className = 'tile-unit-cell';
+        tileElement.appendChild(unitCell);
+      }
+      return tileElement;
+    }
+
+    function pushState() {
+      const s = placedTiles.map(t=>({x:t.x,y:t.y,size:t.size}));
+      if (history.length===0 || JSON.stringify(history[history.length-1]) !== JSON.stringify(s)) {
+        history.push(s);
+        if (history.length > MAX_HISTORY) history.shift();
+      }
+      updateUndoButtonState();
+    }
+
+    function undoLastMove() {
+      if (history.length === 0) return;
+      history.pop();
+      const prev = history.length > 0 ? history[history.length-1] : [];
+      rebuildGrid(prev);
+      updateStatus();
+    }
+
+    function rebuildGrid(state) {
+      placedTiles.forEach(t => t.element.remove());
+      placedTiles = [];
+      state.forEach(td => {
+        const el = createTileElement(td.size, false);
+        // finalize using percent placement to keep exact alignment
+        const leftPct = (td.x / GRID_SIZE) * 100;
+        const topPct = (td.y / GRID_SIZE) * 100;
+        const widthPct = (td.size / GRID_SIZE) * 100;
+        const heightPct = (td.size / GRID_SIZE) * 100;
+        finalizeTilePlacement(td.x, td.y, td.size, el, leftPct, topPct, false, widthPct, heightPct);
+      });
+    }
+
+    function updateUndoButtonState(){
+      undoButton.disabled = history.length <= 0;
+      if (history.length > 0) { undoButton.classList.remove('bg-yellow-500/50'); undoButton.classList.add('bg-yellow-500'); }
+      else { undoButton.classList.remove('bg-yellow-500'); undoButton.classList.add('bg-yellow-500/50'); }
+    }
+
+    function deselectTile(){ currentTileSize = null; updateTileOptions(null); updateStatus(); }
+
+    function getPointerPos(e){
+      if (e.touches && e.touches.length>0) return {clientX:e.touches[0].clientX, clientY:e.touches[0].clientY};
+      return {clientX:e.clientX, clientY:e.clientY};
+    }
+
+    function createTileOption(size){
+      const wrapper = document.createElement('div'); wrapper.className='tile-option-wrapper';
+      const tile = document.createElement('div');
+      tile.className = `draggable-tile-source ${tileColors[size]}`;
+      tile.style.width = `${50 * size / 2}px`;
+      tile.style.height = `${50 * size / 2}px`;
+      tile.dataset.size = size;
+      tile.style.setProperty('--tile-grid-template', `repeat(${size},1fr)`);
+      for (let i=0;i<size*size;i++){ const c=document.createElement('div'); c.className='tile-unit-cell'; tile.appendChild(c); }
+      const label = document.createElement('span'); label.className='text-sm text-gray-700'; label.textContent=`${size}x${size}`;
+      wrapper.appendChild(tile); wrapper.appendChild(label);
+
+      tile.addEventListener('click', e => { e.stopPropagation(); if (currentTileSize===size) deselectTile(); else selectTileSize(size); });
+      tile.addEventListener('mousedown', e => { if (e.button===0) startDragFromSource(e,size); });
+      tile.addEventListener('touchstart', e => startDragFromSource(e,size), {passive:false});
+      return wrapper;
+    }
+
+    function generateTileOptions(){ tileOptionsSource.innerHTML=''; tileSizes.forEach(s=>tileOptionsSource.appendChild(createTileOption(s))); }
+
+    function selectTileSize(size){ if (currentTileSize !== size) { currentTileSize = size; updateTileOptions(size); updateStatus(); } }
+
+    function updateTileOptions(selectedSize){
+      const hasPlacedTiles = placedTiles.length > 0;
+      document.querySelectorAll('.draggable-tile-source').forEach(tile=>{
+        const wrapper = tile.closest('.tile-option-wrapper');
+        const size = parseInt(tile.dataset.size);
+        tile.classList.remove('tile-option-selected');
+        if (selectedSize !== null && hasPlacedTiles) {
+          if (size === selectedSize) tile.classList.add('tile-option-selected');
+          else { wrapper.classList.add('tile-option-disabled'); tile.style.pointerEvents='none'; }
+        } else if (selectedSize !== null && size === selectedSize) {
+          tile.classList.add('tile-option-selected'); wrapper.classList.remove('tile-option-disabled'); tile.style.pointerEvents='auto';
+        } else { wrapper.classList.remove('tile-option-disabled'); tile.style.pointerEvents='auto'; }
+      });
+    }
+
+    function updateStatus(){
+      if (currentTileSize) {
+        const tileArea = currentTileSize*currentTileSize;
+        const totalUnits = GRID_SIZE*GRID_SIZE;
+        const totalAreaFilled = placedTiles.length * tileArea;
+        const isFactor = factorTiles.includes(currentTileSize);
+        const tileInUse = `<span class="text-indigo-600 font-bold">Tile:</span> ${currentTileSize}x${currentTileSize}`;
+        const tilesPlaced = `<span class="text-indigo-600 font-bold">Placed:</span> ${placedTiles.length}`;
+        const baseMessage = `<p class="flex items-center gap-8 text-sm sm:text-base">${tileInUse} ${tilesPlaced}</p>`;
+        let nudgeText=''; let nudgeClass='';
+        if (isFactor && totalAreaFilled / totalUnits >= 0.75 && placedTiles.length < (totalUnits / tileArea)) { nudgeText="(You're close!)"; nudgeClass="text-green-600"; }
+        if (nonFactorTiles.includes(currentTileSize) && placedTiles.length >= 2) { nudgeText="(Hint: Try another size?)"; nudgeClass="text-red-500"; }
+        statusBar.classList.add('active'); statusMessageContent.innerHTML = baseMessage; statusMessageContent.classList.remove('opacity-0');
+        hintLeft.textContent=''; hintRight.textContent=nudgeText; hintRight.className=`font-semibold ${nudgeClass}`; hintsContainer.classList.remove('opacity-0');
+      } else {
+        statusBar.classList.remove('active'); statusMessageContent.innerHTML=''; statusMessageContent.classList.add('opacity-0');
+        hintsContainer.classList.add('opacity-0'); hintLeft.textContent=''; hintRight.textContent='';
+      }
+      updateUndoButtonState();
+    }
+
+    function checkOverlap(x,y,size){
+      return placedTiles.some(tile=>{
+        if (currentDragTile && tile.element === currentDragTile) return false;
+        const xo = Math.max(0, Math.min(x+size, tile.x+tile.size) - Math.max(x, tile.x));
+        const yo = Math.max(0, Math.min(y+size, tile.y+tile.size) - Math.max(y, tile.y));
+        return xo>0 && yo>0;
+      });
+    }
+
+    // Drag start from palette
+    function startDragFromSource(e,size){
+      if (e.type === 'touchstart') e.preventDefault();
+      selectTileSize(size);
+      // create pixel-sized preview element (final will be percent)
+      currentDragTile = createTileElement(size,false);
+      currentDragTile.classList.add('dragging');
+      currentDragTile.style.position='fixed';
+      document.body.appendChild(currentDragTile);
+
+      const pos = getPointerPos(e);
+      const sourceRect = e.currentTarget.getBoundingClientRect();
+      const createdRect = currentDragTile.getBoundingClientRect();
+      const factorX = createdRect.width / Math.max(1, sourceRect.width);
+      const factorY = createdRect.height / Math.max(1, sourceRect.height);
+      dragOffsetX = (pos.clientX - sourceRect.left) * factorX;
+      dragOffsetY = (pos.clientY - sourceRect.top) * factorY;
+
+      isDragging = true; dragOriginIsSource = true;
+      currentDragTile.style.left = `${Math.round(pos.clientX - dragOffsetX)}px`;
+      currentDragTile.style.top = `${Math.round(pos.clientY - dragOffsetY)}px`;
+    }
+
+    // Drag start from board (move)
+    function startDragFromBoard(e,tileData){
+      if (e.type === 'mousedown' && e.button !== 0) return;
+      if (e.type === 'touchstart') e.preventDefault();
+      if (currentTileSize === null || currentTileSize !== tileData.size) selectTileSize(tileData.size);
+      pushState();
+      placedTiles = placedTiles.filter(t => t !== tileData);
+      calculateUnitSize();
+
+      const rect = tileData.element.getBoundingClientRect();
+      const pos = getPointerPos(e);
+      dragOffsetX = pos.clientX - rect.left; dragOffsetY = pos.clientY - rect.top;
+
+      tileData.element.remove();
+      document.body.appendChild(tileData.element);
+      currentDragTile = tileData.element;
+      currentDragTile.classList.add('dragging');
+      currentDragTile.style.position='fixed';
+      currentDragTile.style.left = `${Math.round(rect.left)}px`;
+      currentDragTile.style.top = `${Math.round(rect.top)}px`;
+      currentDragTile.style.width = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
+      currentDragTile.style.height = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
+
+      isDragging = true; dragOriginIsSource = false;
+    }
+
+    function handleMove(e){
+      if (!isDragging || !currentDragTile) return;
+      e.preventDefault();
+      const pos = getPointerPos(e);
+      lastPointerPos = pos;
+      currentDragTile.style.left = `${Math.round(pos.clientX - dragOffsetX)}px`;
+      currentDragTile.style.top = `${Math.round(pos.clientY - dragOffsetY)}px`;
+
+      const size = parseInt(currentDragTile.dataset.size,10);
+      const gridRect = tilingGrid.getBoundingClientRect();
+      if (pos.clientX >= gridRect.left && pos.clientX <= gridRect.right && pos.clientY >= gridRect.top && pos.clientY <= gridRect.bottom){
+        const relativeX = pos.clientX - dragOffsetX - gridRect.left + (UNIT_PIXEL_SIZE/2);
+        const relativeY = pos.clientY - dragOffsetY - gridRect.top + (UNIT_PIXEL_SIZE/2);
+        const unitX = Math.floor(relativeX / UNIT_PIXEL_SIZE);
+        const unitY = Math.floor(relativeY / UNIT_PIXEL_SIZE);
+        const outOfBounds = unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE;
+        const isOverlapped = checkOverlap(unitX, unitY, size);
+        if (outOfBounds || isOverlapped) currentDragTile.classList.add('invalid'); else currentDragTile.classList.remove('invalid');
+      } else currentDragTile.classList.add('invalid');
+    }
+
+    function handleEnd(e){
+      if (!isDragging || !currentDragTile) return;
+      isDragging = false; currentDragTile.classList.remove('dragging');
+      const size = parseInt(currentDragTile.dataset.size,10);
+      const gridRect = gridWrapper.getBoundingClientRect();
+      const tileRect = currentDragTile.getBoundingClientRect();
+      const binRect = tileOptionsContainer.getBoundingClientRect();
+      const droppedInBin = (tileRect.right > binRect.left && tileRect.left < binRect.right && tileRect.bottom > binRect.top && tileRect.top < binRect.bottom);
+      const isOverGridArea = (tileRect.left < gridRect.right && tileRect.right > gridRect.left && tileRect.top < gridRect.bottom && tileRect.bottom > gridRect.top);
+      if (droppedInBin || !isOverGridArea) {
+        currentDragTile.remove();
+        if (!dragOriginIsSource) {
+          const remaining = placedTiles.some(t=>t.size===size);
+          if (!remaining) deselectTile();
+          updateStatus();
+        } else if (dragOriginIsSource) { if (placedTiles.length===0) deselectTile(); }
+      } else {
+        handleDrop(size);
+      }
+      currentDragTile = null; dragOriginIsSource = false; lastPointerPos = null; updateStatus();
+    }
+
+    function handleDrop(size){
+      calculateUnitSize();
+      const gridRect = tilingGrid.getBoundingClientRect();
+      const tileRect = currentDragTile.getBoundingClientRect();
+      const pos = lastPointerPos || { clientX: tileRect.left + dragOffsetX, clientY: tileRect.top + dragOffsetY };
+      const relativeX = pos.clientX - dragOffsetX - gridRect.left;
+      const relativeY = pos.clientY - dragOffsetY - gridRect.top;
+      const unitX = Math.round(relativeX / UNIT_PIXEL_SIZE);
+      const unitY = Math.round(relativeY / UNIT_PIXEL_SIZE);
+      if (unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE) {
+        currentDragTile.remove(); if (!dragOriginIsSource) undoLastMove(); return;
+      }
+      if (checkOverlap(unitX, unitY, size)) { currentDragTile.remove(); if (!dragOriginIsSource) undoLastMove(); return; }
+
+      // final placement in percentages (guaranteed to align with CSS background gridlines)
+      const leftPct = (unitX / GRID_SIZE) * 100;
+      const topPct = (unitY / GRID_SIZE) * 100;
+      const widthPct = (size / GRID_SIZE) * 100;
+      const heightPct = (size / GRID_SIZE) * 100;
+      finalizeTilePlacement(unitX, unitY, size, currentDragTile, leftPct, topPct, true, widthPct, heightPct);
+      if (dragOriginIsSource){ pushState(); checkWinCondition(); } else pushState();
+    }
+
+    function finalizeTilePlacement(x,y,size,element,percentLeft=undefined,percentTop=undefined,shouldPushState=true,percentWidth=undefined,percentHeight=undefined){
+      element.remove(); tilingGrid.appendChild(element); element.style.position='absolute';
+      if (typeof percentLeft !== 'undefined'){
+        element.style.left = `${percentLeft}%`; element.style.top = `${percentTop}%`;
+        element.style.width = `${percentWidth}%`; element.style.height = `${percentHeight}%`;
+      } else {
+        // fallback: pixel placement
+        element.style.left = `${Math.round(x * UNIT_PIXEL_SIZE)}px`;
+        element.style.top = `${Math.round(y * UNIT_PIXEL_SIZE)}px`;
+        element.style.width = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
+        element.style.height = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
+      }
+      const tileData = { x, y, size, element, isPlaced:true };
+      placedTiles.push(tileData);
+      element.addEventListener('mousedown', e => startDragFromBoard(e, tileData));
+      element.addEventListener('touchstart', e => startDragFromBoard(e, tileData), { passive:false });
+      if (shouldPushState) pushState();
+      updateTileOptions(currentTileSize); updateStatus();
+    }
+
+    function checkWinCondition(){
+      const totalUnits = GRID_SIZE * GRID_SIZE; const tileArea = currentTileSize * currentTileSize;
+      if (factorTiles.includes(currentTileSize) && (totalUnits % tileArea === 0)) {
+        const requiredTiles = totalUnits / tileArea;
+        if (placedTiles.length === requiredTiles) {
+          gridWrapper.classList.add('pulse-win'); resetButton.disabled=true; undoButton.disabled=true;
+          setTimeout(()=>{ gridWrapper.classList.remove('pulse-win'); showSummaryDialog(true); }, 1000);
         }
-        
-        const GRID_SIZE = 12; 
-        let UNIT_PIXEL_SIZE = 50; 
-        const tileSizes = [2, 3, 4, 5, 6, 7, 8];
-        const factorTiles = [2, 3, 4, 6];
-        const nonFactorTiles = [5, 7, 8];
-        const tileColors = { 2: 'bg-green-500', 3: 'bg-orange-500', 4: 'bg-blue-500', 5: 'bg-yellow-500', 6: 'bg-red-500', 7: 'bg-indigo-300', 8: 'bg-pink-300' };
+      }
+    }
 
-        let currentTileSize = null;
-        let placedTiles = []; 
-        let history = []; 
-        const MAX_HISTORY = 30;
+    // click-to-place uses percent placement too
+    tilingGrid.addEventListener('click', e => {
+      if (isDragging) return; if (!currentTileSize) return;
+      const pos = getPointerPos(e); const gridRect = tilingGrid.getBoundingClientRect();
+      const relX = pos.clientX - gridRect.left; const relY = pos.clientY - gridRect.top;
+      const centerUnitX = Math.round(relX / UNIT_PIXEL_SIZE); const centerUnitY = Math.round(relY / UNIT_PIXEL_SIZE);
+      const unitX = centerUnitX - Math.floor(currentTileSize / 2); const unitY = centerUnitY - Math.floor(currentTileSize / 2);
+      if (unitX < 0 || unitY < 0 || unitX + currentTileSize > GRID_SIZE || unitY + currentTileSize > GRID_SIZE) return;
+      if (checkOverlap(unitX, unitY, currentTileSize)) return;
+      const el = createTileElement(currentTileSize,false);
+      const leftPct = (unitX / GRID_SIZE) * 100; const topPct = (unitY / GRID_SIZE) * 100;
+      const widthPct = (currentTileSize / GRID_SIZE) * 100; const heightPct = (currentTileSize / GRID_SIZE) * 100;
+      finalizeTilePlacement(unitX, unitY, currentTileSize, el, leftPct, topPct, true, widthPct, heightPct);
+      pushState(); checkWinCondition();
+    });
 
-        let isDragging = false; 
-        let dragOriginIsSource = false; 
-        let currentDragTile = null; 
-        let dragOffsetX = 0, dragOffsetY = 0; 
-        let lastPointerPos = null;
+    function createDialogTileVisual(size){
+      const tileVisual = document.createElement('div'); tileVisual.className = `dialog-tile-visualization ${tileColors[size]} mx-auto`;
+      tileVisual.style.setProperty('--tile-grid-template', `repeat(${size},1fr)`);
+      for (let i=0;i<size*size;i++){ const c=document.createElement('div'); c.className='tile-unit-cell'; tileVisual.appendChild(c); }
+      return tileVisual.outerHTML;
+    }
 
-        const gridWrapper = document.getElementById('grid-wrapper');
-        const tilingGrid = document.getElementById('tiling-grid');
-        const tileOptionsContainer = document.getElementById('tile-options-container');
-        const tileOptionsSource = document.getElementById('tile-options'); 
-        const statusBar = document.getElementById('status-bar');
-        const statusMessageContent = document.getElementById('status-message-content');
-        const hintsContainer = document.getElementById('hints-container');
-        const hintLeft = document.getElementById('hint-left');
-        const hintRight = document.getElementById('hint-right');
-        const resetButton = document.getElementById('reset-button');
-        const undoButton = document.getElementById('undo-button'); 
-        const gameDialog = document.getElementById('game-dialog');
-        const dialogContentArea = document.getElementById('dialog-content-area');
-        const simpleMessageContainer = document.getElementById('simple-message-container');
+    function showSummaryDialog(success,sizeAttempted = null){
+      gridWrapper.classList.remove('pulse-win'); resetButton.disabled=false; dialogContentArea.classList.add('scale-90','opacity-0');
+      gameDialog.classList.remove('hidden');
+      const size = currentTileSize || sizeAttempted; const tileText = `${size}x${size}`;
+      document.getElementById('summary-content').innerHTML=''; document.getElementById('dialog-close-button').style.display='none';
+      if (success){
+        const tileVisualHTML = createDialogTileVisual(size);
+        simpleMessageContainer.innerHTML = `<p class="success-title">Amazing Job!</p>
+          <div class="flex flex-col items-center gap-4 py-4 border-y border-green-200">${tileVisualHTML}<span class="factor-display">${size}</span><p class="text-xl font-semibold text-gray-700">is a factor of 12!</p></div>
+          <p class="success-message text-xl mt-4">You perfectly tiled the $12 \\times 12$ square using the ${tileText} tile.</p>`;
+        document.getElementById('summary-content').innerHTML = `<div class="flex gap-4 pt-4"><button id="btn-back" class="flex-1 px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600">Back to View</button><button id="btn-next" class="flex-1 px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">Next</button></div>`;
+        setTimeout(()=>{ document.getElementById('btn-back').onclick = hideDialog; document.getElementById('btn-next').onclick = ()=>{ hideDialog(); resetGame(true); }; },10);
+      } else {
+        const tileVisualHTML = createDialogTileVisual(size);
+        simpleMessageContainer.innerHTML = `<p class="success-title" style="color:#EF4444">Try Again!</p>
+          <div class="flex flex-col items-center gap-4 py-4 border-y border-red-200">${tileVisualHTML}<span class="factor-display" style="color:#EF4444">${size}</span><p class="text-xl font-semibold text-gray-700">is NOT a factor of 12.</p></div>
+          <p class="success-message text-xl mt-4" style="color:#374151">${tileText} squares cannot fill a 12x12 square without overlaps or gaps.</p>`;
+        document.getElementById('dialog-close-button').style.display='block';
+        document.getElementById('dialog-close-button').textContent='Start New Attempt';
+        document.getElementById('dialog-close-button').onclick = ()=>{ hideDialog(); resetGame(true); };
+      }
+      setTimeout(()=>{ dialogContentArea.classList.remove('scale-90','opacity-0'); renderMath(); }, 10);
+    }
 
-        // Calculate unit size using integer pixels from the smaller dimension (width/height)
-        function calculateUnitSize() {
-            const clientW = tilingGrid.clientWidth;
-            const clientH = tilingGrid.clientHeight;
-            const usable = Math.min(clientW, clientH);
-            // floor to integer pixels so multiples line up exactly
-            UNIT_PIXEL_SIZE = usable > 0 ? Math.floor(usable / GRID_SIZE) : 50;
-        }
+    function hideDialog(){ gridWrapper.classList.remove('pulse-win'); resetButton.disabled=false; updateUndoButtonState(); dialogContentArea.classList.add('scale-90','opacity-0'); setTimeout(()=>{ gameDialog.classList.add('hidden'); },300); }
 
-        function createTileElement(size, isGhost = false) {
-            calculateUnitSize(); 
-            const tileElement = document.createElement('div');
-            tileElement.className = `${isGhost ? '' : 'placed-tile'} ${tileColors[size]}`;
-            // Use integer pixel sizes to avoid sub-pixel mismatch on mobile
-            const px = Math.round(size * UNIT_PIXEL_SIZE);
-            tileElement.style.width = `${px}px`;
-            tileElement.style.height = `${px}px`;
-            tileElement.dataset.size = size;
-            tileElement.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
-            for (let i = 0; i < size * size; i++) {
-                const unitCell = document.createElement('div');
-                unitCell.className = 'tile-unit-cell';
-                tileElement.appendChild(unitCell);
-            }
-            return tileElement;
-        }
+    function resetGame(skipSummaryCheck = false){
+      const wasNonFactorAttempt = !skipSummaryCheck && currentTileSize !== null && nonFactorTiles.includes(currentTileSize) && placedTiles.length > 0;
+      const sizeAttempted = currentTileSize; currentTileSize = null; placedTiles.forEach(t=>t.element.remove()); placedTiles=[]; history=[]; initGrid(); generateTileOptions(); updateTileOptions(null); updateStatus();
+      if (wasNonFactorAttempt) showSummaryDialog(false,sizeAttempted);
+    }
 
-        function pushState() {
-            const serializableState = placedTiles.map(t => ({ x: t.x, y: t.y, size: t.size }));
-            if (history.length === 0 || JSON.stringify(history[history.length - 1]) !== JSON.stringify(serializableState)) {
-                history.push(serializableState); 
-                if (history.length > MAX_HISTORY) history.shift(); 
-            }
-            updateUndoButtonState();
-        }
+    window.addEventListener('resize', ()=>{ calculateUnitSize(); renderMath(); });
 
-        function undoLastMove() {
-            if (history.length > 0) {
-                history.pop();
-                const previousState = history.length > 0 ? history[history.length - 1] : [];
-                rebuildGrid(previousState);
-                updateStatus();
-            }
-            updateUndoButtonState();
-        }
+    window.onload = ()=>{
+      initGrid(); generateTileOptions(); updateStatus();
+      resetButton.addEventListener('click', ()=>resetGame(false)); undoButton.addEventListener('click', undoLastMove); updateUndoButtonState();
+      document.addEventListener('mousemove', handleMove); document.addEventListener('touchmove', handleMove, {passive:false});
+      document.addEventListener('mouseup', handleEnd); document.addEventListener('touchend', handleEnd);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') deselectTile(); });
+      renderMath();
+    };
 
-        function rebuildGrid(state) {
-            placedTiles.forEach(t => t.element.remove());
-            placedTiles = [];
-            state.forEach(tileData => {
-                const newTileElement = createTileElement(tileData.size, false);
-                finalizeTilePlacement(tileData.x, tileData.y, tileData.size, newTileElement, tileData.x * UNIT_PIXEL_SIZE, tileData.y * UNIT_PIXEL_SIZE, false); 
-            });
-        }
-        
-        function updateUndoButtonState() {
-            undoButton.disabled = history.length <= 0;
-            if (history.length > 0) {
-                undoButton.classList.remove('bg-yellow-500/50');
-                undoButton.classList.add('bg-yellow-500');
-            } else {
-                 undoButton.classList.remove('bg-yellow-500');
-                undoButton.classList.add('bg-yellow-500/50');
-            }
-        }
-
-        function deselectTile() {
-            currentTileSize = null;
-            updateTileOptions(null);
-            updateStatus();
-        }
-
-        // Helper to handle touch/mouse coordinates unified
-        function getPointerPos(e) {
-            if (e.touches && e.touches.length > 0) {
-                return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-            }
-            return { clientX: e.clientX, clientY: e.clientY };
-        }
-
-        function createTileOption(size) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'tile-option-wrapper';
-            const tile = document.createElement('div');
-            tile.className = `draggable-tile-source ${tileColors[size]}`;
-            tile.style.width = `${50 * size / 2}px`; 
-            tile.style.height = `${50 * size / 2}px`;
-            tile.dataset.size = size;
-            tile.style.setProperty('--tile-grid-template', `repeat(${size}, 1fr)`);
-            for (let i = 0; i < size * size; i++) {
-                const unitCell = document.createElement('div');
-                unitCell.className = 'tile-unit-cell';
-                tile.appendChild(unitCell);
-            }
-            const label = document.createElement('span');
-            label.className = 'text-lg font-medium text-gray-700';
-            label.textContent = `${size}x${size}`;
-            wrapper.appendChild(tile);
-            wrapper.appendChild(label);
-            
-            tile.addEventListener('click', (e) => { 
-                e.stopPropagation(); 
-                if (currentTileSize === size) {
-                    deselectTile();
-                } else {
-                    selectTileSize(size); 
-                }
-            });
-            
-            // Add touchstart for mobile dragging
-            tile.addEventListener('mousedown', (e) => { if (e.button === 0) startDragFromSource(e, size); });
-            tile.addEventListener('touchstart', (e) => startDragFromSource(e, size), { passive: false });
-            
-            return wrapper;
-        }
-
-        function generateTileOptions() {
-            tileOptionsSource.innerHTML = '';
-            tileSizes.forEach(size => tileOptionsSource.appendChild(createTileOption(size)));
-        }
-        
-        function selectTileSize(size) {
-            if (currentTileSize !== size) {
-                currentTileSize = size;
-                updateTileOptions(size);
-                updateStatus();
-            }
-        }
-
-        function updateTileOptions(selectedSize) {
-            const hasPlacedTiles = placedTiles.length > 0;
-            document.querySelectorAll('.draggable-tile-source').forEach(tile => {
-                const wrapper = tile.closest('.tile-option-wrapper');
-                const size = parseInt(tile.dataset.size);
-                tile.classList.remove('tile-option-selected');
-                if (selectedSize !== null && hasPlacedTiles) {
-                    if (size === selectedSize) tile.classList.add('tile-option-selected');
-                    else { wrapper.classList.add('tile-option-disabled'); tile.style.pointerEvents = 'none'; }
-                } else if (selectedSize !== null && size === selectedSize) {
-                     tile.classList.add('tile-option-selected');
-                     wrapper.classList.remove('tile-option-disabled');
-                     tile.style.pointerEvents = 'auto';
-                } else {
-                    wrapper.classList.remove('tile-option-disabled');
-                    tile.style.pointerEvents = 'auto';
-                }
-            });
-        }
-
-        function updateStatus() {
-            if (currentTileSize) {
-                const tileArea = currentTileSize * currentTileSize;
-                const totalUnits = GRID_SIZE * GRID_SIZE;
-                const totalAreaFilled = placedTiles.length * tileArea;
-                const isFactor = factorTiles.includes(currentTileSize);
-
-                const tileInUse = `<span class="text-indigo-600 font-bold">Tile:</span> ${currentTileSize}x${currentTileSize}`;
-                const tilesPlaced = `<span class="text-indigo-600 font-bold">Placed:</span> ${placedTiles.length}`;
-                const baseMessage = `<p class="flex items-center gap-8 text-sm sm:text-base">${tileInUse} ${tilesPlaced}</p>`;
-                
-                let nudgeText = '';
-                let nudgeClass = '';
-                
-                if (isFactor && totalAreaFilled / totalUnits >= 0.75 && placedTiles.length < (totalUnits / tileArea)) {
-                    nudgeText = "(You're close!)";
-                    nudgeClass = "text-green-600";
-                }
-                
-                const isNonFactor = nonFactorTiles.includes(currentTileSize);
-                if (isNonFactor && placedTiles.length >= 2) {
-                    nudgeText = "(Hint: Try another size?)";
-                    nudgeClass = "text-red-500";
-                }
-                
-                statusBar.classList.add('active');
-                statusMessageContent.innerHTML = baseMessage;
-                statusMessageContent.classList.remove('opacity-0');
-                
-                hintLeft.textContent = ''; 
-                hintRight.textContent = nudgeText;
-                hintRight.className = `font-semibold ${nudgeClass}`;
-                hintsContainer.classList.remove('opacity-0');
-
-            } else {
-                statusBar.classList.remove('active');
-                statusMessageContent.innerHTML = '';
-                statusMessageContent.classList.add('opacity-0');
-                
-                hintsContainer.classList.add('opacity-0');
-                hintLeft.textContent = '';
-                hintRight.textContent = '';
-            }
-            updateUndoButtonState(); 
-        }
-
-        function checkOverlap(x, y, size) {
-            return placedTiles.some(tile => {
-                if (currentDragTile && tile.element === currentDragTile) return false;
-                const xOverlap = Math.max(0, Math.min(x + size, tile.x + tile.size) - Math.max(x, tile.x));
-                const yOverlap = Math.max(0, Math.min(y + size, tile.y + tile.size) - Math.max(y, tile.y));
-                return xOverlap > 0 && yOverlap > 0;
-            });
-        }
-
-        // DRAG START from Options
-        function startDragFromSource(e, size) {
-            if (e.type === 'touchstart') e.preventDefault(); 
-            
-            selectTileSize(size); 
-
-            // Create final-size element and append it BEFORE computing offsets to ensure accurate size
-            currentDragTile = createTileElement(size, false);
-            currentDragTile.classList.add('dragging');
-            currentDragTile.style.position = 'fixed'; 
-            document.body.appendChild(currentDragTile);
-
-            // Measure created drag element and the source thumbnail, then compute offset mapping
-            const pos = getPointerPos(e);
-            const sourceRect = e.currentTarget.getBoundingClientRect();
-            const createdRect = currentDragTile.getBoundingClientRect();
-            // map pointer offset from source to created tile using exact ratio
-            const factorX = createdRect.width / Math.max(1, sourceRect.width);
-            const factorY = createdRect.height / Math.max(1, sourceRect.height);
-            dragOffsetX = (pos.clientX - sourceRect.left) * factorX;
-            dragOffsetY = (pos.clientY - sourceRect.top) * factorY;
-            
-            isDragging = true;
-            dragOriginIsSource = true;
-            
-            // snap currentDragTile to integer pixel coordinates for crispness on mobile
-            const leftPx = Math.round(pos.clientX - dragOffsetX);
-            const topPx = Math.round(pos.clientY - dragOffsetY);
-            currentDragTile.style.left = `${leftPx}px`;
-            currentDragTile.style.top = `${topPx}px`;
-        }
-
-        // DRAG START from Grid
-        function startDragFromBoard(e, tileData) {
-             if (e.type === 'mousedown' && e.button !== 0) return;
-             if (e.type === 'touchstart') e.preventDefault();
-
-            if (currentTileSize === null || currentTileSize !== tileData.size) selectTileSize(tileData.size);
-            // Snapshot state before removing so removal can be undone
-            pushState();
-            placedTiles = placedTiles.filter(t => t !== tileData);
-            calculateUnitSize();
-            
-            // Important: calculate offset before removing tile
-            const rect = tileData.element.getBoundingClientRect();
-            const pos = getPointerPos(e);
-            dragOffsetX = pos.clientX - rect.left;
-            dragOffsetY = pos.clientY - rect.top;
-
-            tileData.element.remove();
-            document.body.appendChild(tileData.element);
-            currentDragTile = tileData.element;
-            currentDragTile.classList.add('dragging');
-            currentDragTile.style.position = 'fixed'; // Use fixed for dragging
-            
-            // Position and round to integer pixels
-            currentDragTile.style.left = `${Math.round(rect.left)}px`;
-            currentDragTile.style.top = `${Math.round(rect.top)}px`;
-
-            isDragging = true;
-            dragOriginIsSource = false; 
-        }
-
-        function handleMove(e) {
-            if (isDragging && currentDragTile) {
-                e.preventDefault(); // Prevent scrolling during drag
-                const pos = getPointerPos(e);
-                lastPointerPos = pos;
-                
-                // Use integer pixel positions for better alignment
-                currentDragTile.style.left = `${Math.round(pos.clientX - dragOffsetX)}px`;
-                currentDragTile.style.top = `${Math.round(pos.clientY - dragOffsetY)}px`;
-                
-                const size = parseInt(currentDragTile.dataset.size);
-                const gridRect = tilingGrid.getBoundingClientRect();
-                
-                // Improved detection for being "over the grid"
-                if (pos.clientX >= gridRect.left && pos.clientX <= gridRect.right && 
-                    pos.clientY >= gridRect.top && pos.clientY <= gridRect.bottom) {
-                    
-                    const relativeX = pos.clientX - dragOffsetX - gridRect.left + (UNIT_PIXEL_SIZE/2); 
-                    const relativeY = pos.clientY - dragOffsetY - gridRect.top + (UNIT_PIXEL_SIZE/2);
-                    const unitX = Math.floor(relativeX / UNIT_PIXEL_SIZE);
-                    const unitY = Math.floor(relativeY / UNIT_PIXEL_SIZE);
-                    
-                    const outOfBounds = unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE;
-                    const isOverlapped = checkOverlap(unitX, unitY, size);
-                    
-                    if (outOfBounds || isOverlapped) currentDragTile.classList.add('invalid');
-                    else currentDragTile.classList.remove('invalid');
-                } else {
-                     currentDragTile.classList.add('invalid'); 
-                }
-            }
-        }
-
-        function handleEnd(e) {
-            if (!isDragging || !currentDragTile) return;
-            isDragging = false;
-            currentDragTile.classList.remove('dragging');
-            
-            const size = parseInt(currentDragTile.dataset.size);
-            const gridRect = gridWrapper.getBoundingClientRect();
-            const tileRect = currentDragTile.getBoundingClientRect();
-            const binRect = tileOptionsContainer.getBoundingClientRect(); 
-
-            const droppedInBin = (tileRect.right > binRect.left && tileRect.left < binRect.right && tileRect.bottom > binRect.top && tileRect.top < binRect.bottom);
-            // Check overlap with grid wrapper logic
-            const isOverGridArea = (
-                tileRect.left < gridRect.right && tileRect.right > gridRect.left &&
-                tileRect.top < gridRect.bottom && tileRect.bottom > gridRect.top
-            );
-
-            if (droppedInBin || !isOverGridArea) {
-                // Deletion: tile removed. If it was dragged from board, we already snapshot a state (pushState) before removing so undo will restore.
-                currentDragTile.remove();
-                if (!dragOriginIsSource) {
-                    // If there are no remaining tiles of this size, reset selection
-                    const sizeInt = size;
-                    const remainingOfSize = placedTiles.some(t => t.size === sizeInt);
-                    if (!remainingOfSize) {
-                        deselectTile();
-                    }
-                    updateStatus();
-                } else if (dragOriginIsSource) {
-                    if (placedTiles.length === 0) {
-                         deselectTile(); 
-                    }
-                }
-            } else {
-                handleDrop(size);
-            }
-            currentDragTile = null;
-            dragOriginIsSource = false;
-            lastPointerPos = null;
-            updateStatus();
-        }
-        
-        function handleDrop(size) {
-            calculateUnitSize(); // ensure unit size is up-to-date
-            const gridRect = tilingGrid.getBoundingClientRect();
-            const tileRect = currentDragTile.getBoundingClientRect();
-            // Use stored lastPointerPos when available for consistent snapping
-            const pos = lastPointerPos || { clientX: tileRect.left + dragOffsetX, clientY: tileRect.top + dragOffsetY };
-            
-            const relativeX = pos.clientX - dragOffsetX - gridRect.left;
-            const relativeY = pos.clientY - dragOffsetY - gridRect.top;
-            
-            // compute unit coords and snap using rounded integer math
-            const unitX = Math.round(relativeX / UNIT_PIXEL_SIZE);
-            const unitY = Math.round(relativeY / UNIT_PIXEL_SIZE);
-            
-            if (unitX < 0 || unitY < 0 || unitX + size > GRID_SIZE || unitY + size > GRID_SIZE) {
-                currentDragTile.remove();
-                // if we dragged an existing tile off-grid unintentionally, undo to restore it
-                if (!dragOriginIsSource) undoLastMove();
-                return; 
-            }
-            if (checkOverlap(unitX, unitY, size)) {
-                currentDragTile.remove();
-                if (!dragOriginIsSource) undoLastMove();
-                return; 
-            }
-            
-            // Switch from FIXED drag position back to ABSOLUTE grid position
-            const snapX = Math.round(unitX * UNIT_PIXEL_SIZE);
-            const snapY = Math.round(unitY * UNIT_PIXEL_SIZE);
-            finalizeTilePlacement(unitX, unitY, size, currentDragTile, snapX, snapY, true); 
-            
-            if (dragOriginIsSource) {
-                pushState();
-                checkWinCondition();
-            } else {
-                // dragged from board and successfully placed — we already pushed at drag start; push again to capture move as next history entry
-                pushState();
-            }
-        }
-        
-        function finalizeTilePlacement(x, y, size, element, snapX = x * UNIT_PIXEL_SIZE, snapY = y * UNIT_PIXEL_SIZE, shouldPushState = true) {
-            element.remove(); 
-            tilingGrid.appendChild(element); 
-            element.style.position = 'absolute'; // Back to absolute inside grid
-            element.style.left = `${Math.round(snapX)}px`;
-            element.style.top = `${Math.round(snapY)}px`;
-            element.style.width = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
-            element.style.height = `${Math.round(size * UNIT_PIXEL_SIZE)}px`;
-            
-            const tileData = { x, y, size, element, isPlaced: true }; 
-            placedTiles.push(tileData);
-            
-            // Attach both mouse and touch handlers to placed tiles
-            element.addEventListener('mousedown', (e) => startDragFromBoard(e, tileData));
-            element.addEventListener('touchstart', (e) => startDragFromBoard(e, tileData), { passive: false });
-            
-            if (shouldPushState) pushState();
-            updateTileOptions(currentTileSize); 
-            updateStatus();
-        }
-        
-        function checkWinCondition() {
-            const totalUnits = GRID_SIZE * GRID_SIZE; 
-            const tileArea = currentTileSize * currentTileSize;
-            if (factorTiles.includes(currentTileSize) && (totalUnits % tileArea === 0)) {
-                 const requiredTiles = totalUnits / tileArea;
-                if (placedTiles.length === requiredTiles) {
-                    gridWrapper.classList.add('pulse-win'); 
-                    resetButton.disabled = true;
-                    undoButton.disabled = true; 
-                    setTimeout(() => {
-                        gridWrapper.classList.remove('pulse-win'); 
-                        showSummaryDialog(true);
-                    }, 1000); 
-                }
-            } 
-        }
-
-        // Click-to-place: stamp tile on grid when clicking/tapping the grid while a tile size is selected
-        tilingGrid.addEventListener('click', (e) => {
-            if (isDragging) return; // ignore clicks during drag
-            if (!currentTileSize) return;
-            const pos = getPointerPos(e);
-            const gridRect = tilingGrid.getBoundingClientRect();
-            const relX = pos.clientX - gridRect.left;
-            const relY = pos.clientY - gridRect.top;
-            // center the tile around the click
-            const centerUnitX = Math.round(relX / UNIT_PIXEL_SIZE);
-            const centerUnitY = Math.round(relY / UNIT_PIXEL_SIZE);
-            const unitX = centerUnitX - Math.floor(currentTileSize / 2);
-            const unitY = centerUnitY - Math.floor(currentTileSize / 2);
-            if (unitX < 0 || unitY < 0 || unitX + currentTileSize > GRID_SIZE || unitY + currentTileSize > GRID_SIZE) return;
-            if (checkOverlap(unitX, unitY, currentTileSize)) return;
-            const el = createTileElement(currentTileSize, false);
-            finalizeTilePlacement(unitX, unitY, currentTileSize, el, unitX * UNIT_PIXEL_SIZE, unitY * UNIT_PIXEL_SIZE, true);
-            pushState();
-            checkWinCondition();
-        });
-
-        function hideDialog() {
-            gridWrapper.classList.remove('pulse-win'); 
-            resetButton.disabled = false; 
-            updateUndoButtonState(); 
-            dialogContentArea.classList.add('scale-90', 'opacity-0');
-            setTimeout(() => { gameDialog.classList.add('hidden'); }, 300);
-        }
-
-        function createDialogTileVisual(size) {
-            const tileColor = tileColors[size];
-            const tileVisual = document.createElement('div');
-            tileVisual.className = `dialog-tile-visualization ${tileColor} mx-auto`;
-            const gridTemplate = `repeat(${size}, 1fr)`;
-            tileVisual.style.setProperty('--tile-grid-template', gridTemplate);
-            for (let i = 0; i < size * size; i++) {
-                const unitCell = document.createElement('div');
-                unitCell.className = 'tile-unit-cell';
-                tileVisual.appendChild(unitCell);
-            }
-            return tileVisual.outerHTML;
-        }
-
-        function showSummaryDialog(success, sizeAttempted = null) {
-            gridWrapper.classList.remove('pulse-win'); 
-            resetButton.disabled = false; 
-            dialogContentArea.classList.add('scale-90', 'opacity-0');
-            gameDialog.classList.remove('hidden');
-            const size = currentTileSize || sizeAttempted;
-            const tileText = `${size}x${size}`;
-            document.getElementById('summary-content').innerHTML = '';
-            document.getElementById('dialog-close-button').style.display = 'none'; 
-
-            if (success) {
-                const tileVisualHTML = createDialogTileVisual(size);
-                simpleMessageContainer.innerHTML = `
-                    <p class="success-title">Amazing Job!</p>
-                    <div class="flex flex-col items-center gap-4 py-4 border-y border-green-200">
-                        ${tileVisualHTML}
-                        <span class="factor-display">${size}</span>
-                        <p class="text-xl font-semibold text-gray-700">is a factor of 12!</p>
-                    </div>
-                    <p class="success-message text-xl mt-4">You perfectly tiled the $12 \\times 12$ square using the ${tileText} tile.</p>
-                `;
-                document.getElementById('summary-content').innerHTML = `
-                    <div class="flex gap-4 pt-4"> 
-                        <button id="btn-back" class="flex-1 px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition duration-150">Back to View</button>
-                        <button id="btn-next" class="flex-1 px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150">Next</button>
-                    </div>
-                `;
-                setTimeout(() => {
-                    document.getElementById('btn-back').onclick = hideDialog;
-                    document.getElementById('btn-next').onclick = () => { hideDialog(); resetGame(true); };
-                }, 10);
-            } else {
-                const tileVisualHTML = createDialogTileVisual(size);
-                simpleMessageContainer.innerHTML = `
-                    <p class="success-title" style="color: #EF4444;">Try Again!</p>
-                    <div class="flex flex-col items-center gap-4 py-4 border-y border-red-200">
-                        ${tileVisualHTML}
-                        <span class="factor-display" style="color: #EF4444;">${size}</span>
-                        <p class="text-xl font-semibold text-gray-700">is NOT a factor of 12.</p>
-                    </div>
-                    <p class="success-message text-xl mt-4" style="color: #374151;">${tileText} squares cannot fill a 12x12 square without overlaps or gaps.</p>
-                `;
-                document.getElementById('dialog-close-button').style.display = 'block';
-                document.getElementById('dialog-close-button').textContent = 'Start New Attempt';
-                document.getElementById('dialog-close-button').onclick = () => { hideDialog(); resetGame(true); };
-            }
-            setTimeout(() => { dialogContentArea.classList.remove('scale-90', 'opacity-0'); renderMath(); }, 10);
-        }
-
-        function resetGame(skipSummaryCheck = false) {
-            const wasNonFactorAttempt = !skipSummaryCheck && currentTileSize !== null && nonFactorTiles.includes(currentTileSize) && placedTiles.length > 0;
-            const sizeAttempted = currentTileSize;
-            currentTileSize = null;
-            placedTiles.forEach(t => t.element.remove());
-            placedTiles = [];
-            history = []; 
-            initGrid();
-            generateTileOptions();
-            updateTileOptions(null);
-            updateStatus();
-            if (wasNonFactorAttempt) showSummaryDialog(false, sizeAttempted);
-        }
-        
-        window.addEventListener('resize', () => {
-            calculateUnitSize(); 
-            placedTiles.forEach(tileData => {
-                 tileData.element.style.width = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
-                 tileData.element.style.height = `${Math.round(tileData.size * UNIT_PIXEL_SIZE)}px`;
-                 tileData.element.style.left = `${Math.round(tileData.x * UNIT_PIXEL_SIZE)}px`;
-                 tileData.element.style.top = `${Math.round(tileData.y * UNIT_PIXEL_SIZE)}px`;
-            });
-            renderMath();
-        });
-
-        window.onload = () => {
-            initGrid();
-            generateTileOptions();
-            updateStatus();
-            resetButton.addEventListener('click', () => resetGame(false)); 
-            undoButton.addEventListener('click', undoLastMove); 
-            updateUndoButtonState(); 
-            
-            // Add touch events to document
-            document.addEventListener('mousemove', handleMove); 
-            document.addEventListener('touchmove', handleMove, { passive: false });
-
-            document.addEventListener('mouseup', handleEnd); 
-            document.addEventListener('touchend', handleEnd); 
-            
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') deselectTile();
-            });
-            
-            renderMath();
-        };
-        
-        function initGrid() {
-            calculateUnitSize();
-            Array.from(tilingGrid.querySelectorAll('.placed-tile')).forEach(el => el.remove());
-            // clear existing grid cells and repopulate so grid children are only cells (we rely on them to occupy background)
-            tilingGrid.innerHTML = '';
-            for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'grid-cell';
-                tilingGrid.appendChild(cell);
-            }
-        }
-    </script>
+    function initGrid(){
+      calculateUnitSize();
+      // Clear only placed tiles; we don't create DOM cells anymore because we draw grid with CSS background.
+      Array.from(tilingGrid.children).forEach(c => {
+        // keep any placed-tile children (we'll remove them below), but remove everything to start fresh
+        c.remove();
+      });
+      // set background-size explicitly now that we know GRID_SIZE
+      const colPct = 100 / GRID_SIZE;
+      tilingGrid.style.backgroundSize = `${colPct}% ${colPct}%`;
+    }
+  </script>
 </body>
 </html>
